@@ -13,7 +13,7 @@ subprocess.call( [ "raspistill", "-w", "{0}".format( IMAGE_WIDTH ),
 
 # Try to detect AR markers in the image
 detectionResult = subprocess.check_output( 
-    [ "/home/pi/dev/extra/aruco-1.2.4/build/utils/aruco_simple_no_window",
+    [ "/home/pi/digimakers_scratch_workshop/ar_marker_detector/ar_marker_detector",
       "/home/pi/artifact_detect.jpg" ] )
 
 markerFound = False

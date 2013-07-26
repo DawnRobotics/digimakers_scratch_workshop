@@ -7,7 +7,6 @@ import sys
 import subprocess
 import RPIO
 import RPIO.PWM
-import picam
 
 BLUETOOTH_SERIAL_PORT = "/dev/ttyAMA0"
 BLUETOOTH_SERIAL_BAUD_RATE = 9600
@@ -167,7 +166,7 @@ class ArtifactDetector( ProcessBase ):
 
                 # Try to detect AR markers in the image
                 detectionResult = subprocess.check_output( 
-                    [ "sudo", "/home/pi/dev/extra/aruco-1.2.4/build/utils/aruco_simple_no_window",
+                    [ "sudo", "/home/pi/digimakers_scratch_workshop/ar_marker_detector/ar_marker_detector",
                     "/home/pi/artifact_detect.jpg" ], stderr=subprocess.PIPE )
 
                 print "Detection run"
