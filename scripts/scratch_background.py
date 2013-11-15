@@ -15,6 +15,11 @@ PORT = 42001
 DEFAULT_HOST = '127.0.0.1'
 SOCKET_TIMEOUT = 1
 
+ROVER_START_X = 0
+ROVER_START_Y = -150
+ROVER_START_HEADING_DEGREES = 0
+
+
 #---------------------------------------------------------------------------------------------------
 def byte2int(bstr, width=32):
     val = sum(ord(b)<< 8*n for (n, b) in enumerate(reversed(bstr)))

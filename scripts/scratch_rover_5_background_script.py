@@ -23,6 +23,11 @@ class RobotController( scratch_background.ScratchBase ):
     ENCODER_TICKS_PER_DEGREE = 490.0/90.0
     TICK_REDUCTION = 50.0   # This aims to reduce the effect of control delay
     
+    MAX_ULTRASONIC_RANGE_CM = 400
+    TIME_FOR_BEEP = 0.4
+    MAX_TIME_TO_WAIT_FOR_ARTIFACT_DETECTION = 30.0
+    MAX_NUM_BEEPS = 9
+    
     #-----------------------------------------------------------------------------------------------
     def __init__( self, socket, commandQueue, bluetoothSerial ):
         scratch_background.ScratchBase.__init__( self, socket )
@@ -36,6 +41,10 @@ class RobotController( scratch_background.ScratchBase ):
         self.serialBuffer = ""
         self.leftEncoderCount = 0
         self.rightEncoderCount = 0
+        self.ultrasonicRangeCM = self.MAX_ULTRASONIC_RANGE_CM
+        self.lastDetectionID = -1
+        self.artifactID = -1
+        self.artifactBearingDegrees = 0.0
         
         self.reset()
     
@@ -56,11 +65,19 @@ class RobotController( scratch_background.ScratchBase ):
     #-----------------------------------------------------------------------------------------------
     def reset( self ):
         
-        self.roverX = 0
-        self.roverY = 0
-        self.headingDegrees = 90
+        self.roverX = scratch_background.ROVER_START_X
+        self.roverY = scratch_background.ROVER_START_Y
+        self.headingDegrees = scratch_background.ROVER_START_HEADING_DEGREES
         self.curCommand = None
         self.allCommandsComplete = False
+        
+        self.lastRoverXSent = -10000
+        self.lastRoverYSent = -10000
+        self.lastRoverHeadingDegreesSent = -10000
+        self.lastUltrasonicRangeCMSent = -10000
+        self.lastArtifactIDSent = -10000
+        self.lastArtifactBearingDegreesSent = -10000
+        self.lastAllCommandsCompleteSent = -10000
         
         self.distanceToMove = 0
         self.degreesToTurn = 0
@@ -90,14 +107,17 @@ class RobotController( scratch_background.ScratchBase ):
                 
             # Extract the current status of the robot from the last line                
             statusItems = statusData.split()
-            if len( statusItems ) >= 2:
+            if len( statusItems ) >= 6:
                 
                 try:
                     self.leftEncoderCount = int( statusItems[ 0 ] )
                     self.rightEncoderCount = int( statusItems[ 1 ] )
+                    self.ultrasonicRangeCM = int( statusItems[ 2 ] )
+                    self.lastDetectionID = int( statusItems[ 3 ] )
+                    self.artifactID = int( statusItems[ 4 ] )
+                    self.artifactBearingDegrees = float( statusItems[ 5 ] )
                     
                     self.numStatusMessagesReceived += 1
-                    #self.sonarDistance = int( statusItems[ 2 ] )
                 except:
                     pass    # Ignore parsing errors
                     
@@ -186,6 +206,20 @@ class RobotController( scratch_background.ScratchBase ):
                         self.curCommand = "turn"
                         self.degreesToTurn = self.parseNumber( newCommand[ len( "turn" ): ] )
                         self.turnStartEncoderCount = self.leftEncoderCount
+                        
+                    elif newCommand.startswith( "beep" ):
+                        
+                        self.curCommand = "beep"
+                        self.numBeepsToMake = self.parseNumber( newCommand[ len( "beep" ): ] )
+                        if self.numBeepsToMake > self.MAX_NUM_BEEPS:
+                            self.numBeepsToMake = self.MAX_NUM_BEEPS
+                        self.numBeepsMade = 0
+                        self.waitingForBeepToComplete = False
+                        
+                    elif newCommand == "detectartifact":
+                        
+                        self.curCommand = "detectartifact"
+                        self.waitingForDetectionToComplete = False
     
     #-----------------------------------------------------------------------------------------------
     def updateControlLoop( self ):
@@ -252,7 +286,7 @@ class RobotController( scratch_background.ScratchBase ):
                 else:
                     
                     ticksToTurn += self.TICK_REDUCTION
-                    ticksTurned = self.leftEncoderCount - self.moveStartEncoderCount
+                    ticksTurned = self.leftEncoderCount - self.turnStartEncoderCount
                     
                     if ticksTurned <= ticksToTurn:
                         
@@ -265,7 +299,47 @@ class RobotController( scratch_background.ScratchBase ):
                 if turnComplete:
                     self.curCommand = None
                     self.allCommandsComplete = True
+            
+            elif self.curCommand == "beep":
+                
+                if self.waitingForBeepToComplete \
+                    and curTime - self.timeBeepStarted >= self.TIME_FOR_BEEP:
                     
+                    self.numBeepsMade += 1
+                    self.waitingForBeepToComplete = False
+                    
+                if self.numBeepsMade >= self.numBeepsToMake:
+                    
+                    self.curCommand = None
+                    self.allCommandsComplete = True
+                    
+                else:
+                    
+                    if not self.waitingForBeepToComplete:
+                        # Send a beep command
+                        self.bluetoothSerial.write( "u" )
+                        self.waitingForBeepToComplete = True
+                        self.timeBeepStarted = time.time()
+                        
+            elif self.curCommand == "detectartifact":
+
+                if self.waitingForDetectionToComplete:
+                    
+                    if curTime - self.timeDetectionStarted > self.MAX_TIME_TO_WAIT_FOR_ARTIFACT_DETECTION \
+                        or self.lastDetectionID != self.waitStartDetectionID:
+                            
+                        # We either time out or see that the detection has finished
+                        self.curCommand = None
+                        self.allCommandsComplete = True
+                        
+                else:
+                    
+                    # Send a detection command
+                    self.waitStartDetectionID = self.lastDetectionID
+                    self.bluetoothSerial.write( "p" )
+                    self.waitingForDetectionToComplete = True
+                    self.timeDetectionStarted = time.time()
+                
             else:
                 
                 self.bluetoothSerial.write( "s" )
@@ -296,14 +370,39 @@ class RobotController( scratch_background.ScratchBase ):
             curTime = time.time()
             if curTime - self.timeOfLastSensorUpdate >= self.MIN_TIME_BETWEEN_SENSOR_UPDATES:
                 
-                self.sendSensorUpdate( "roverX", self.roverX )
-                self.sendSensorUpdate( "roverY", self.roverY )
-                self.sendSensorUpdate( "roverHeadingDegrees", self.headingDegrees )
+                if self.roverX != self.lastRoverXSent:
+                    self.sendSensorUpdate( "roverX", self.roverX )
+                    self.lastRoverXSent = self.roverX
                 
-                if self.allCommandsComplete:
-                    self.sendSensorUpdate( "allCommandsComplete", 1 )
-                else:
-                    self.sendSensorUpdate( "allCommandsComplete", 0 )
+                if self.roverY != self.lastRoverYSent:
+                    self.sendSensorUpdate( "roverY", self.roverY )
+                    self.lastRoverYSent = self.roverY
+                
+                if self.headingDegrees != self.lastRoverHeadingDegreesSent:
+                    self.sendSensorUpdate( "roverHeadingDegrees", self.headingDegrees )
+                    self.lastRoverHeadingDegreesSent = self.headingDegrees
+                    
+                if self.ultrasonicRangeCM != self.lastUltrasonicRangeCMSent:
+                    self.sendSensorUpdate( "ultrasonicRangeCM", self.ultrasonicRangeCM )
+                    self.lastUltrasonicRangeCMSent = self.ultrasonicRangeCM
+                    
+                if self.artifactID != self.lastArtifactIDSent:
+                    self.sendSensorUpdate( "artifactID", self.artifactID )
+                    self.lastArtifactIDSent = self.artifactID
+                    
+                if self.artifactBearingDegrees != self.lastArtifactBearingDegreesSent:
+                    self.sendSensorUpdate( "artifactBearingDegrees", self.artifactBearingDegrees )
+                    self.lastArtifactBearingDegreesSent = self.artifactBearingDegrees
+
+                
+                if self.allCommandsComplete != self.lastAllCommandsCompleteSent:
+                    
+                    if self.allCommandsComplete:
+                        self.sendSensorUpdate( "allCommandsComplete", 1 )
+                    else:
+                        self.sendSensorUpdate( "allCommandsComplete", 0 )
+                        
+                    self.lastAllCommandsCompleteSent = self.allCommandsComplete
                 
                 
                 self.timeOfLastSensorUpdate = curTime

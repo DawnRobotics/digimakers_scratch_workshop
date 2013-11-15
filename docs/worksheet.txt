@@ -1,0 +1,42 @@
+Controlling a Robotic Rover with Scratch
+
+Welcome to the Robotic Rover Workshop! In this workshop you play the role of a NASA engineer who is writing a control program for a robotic rover that has landed on Mars. Mission control want the rover to drive around some rocks before searching for an alien artifact that they believe is somewhere in the area.
+
+Due to the time delays that exist when communicating with Mars, it's very difficult to drive the robot remotely from Earth, therefore we need to write a control program to drive the robot for us. Satellite pictures have given us a good map of the mission area, but Mission Control are not sure where the artifact will be.
+
+To avoid damaging the robot, you will first write your control programs in a simulator,
+
+To begin your program, you need to start with the following blocks
+
+[Program start block]
+
+The robot can be stopped at any time by sending a stop broadcast.
+
+You send commands to the rover using the following 3 blocks. This consists of a broadcast to let the robot know that a command is coming, followed by a broadcast to give the command to the robot, and finishing with a wait block that waits until the command is complete.
+
+[Command blocks]
+
+You can send the following commands to the rover. Use the join block to combine commands with numbers or variables.
+
+move DISTANCE_CM  - This will move the robot forwards or backwards. Replace DISTANCE_CM with the number of centimetres you want to move
+
+turn ANGLE        - This will turn the robot left or right. Replace ANGLE with the desired turn angle in degrees
+
+detectArtifact    - Takes a photo with the camera and tries to detect an alien artifact in the photo
+
+beep NUM_BEEPS    - Makes the buzzer on the robot beep NUM_BEEPS times. This is limited to 9 in one go to stop things getting too annoying...
+
+Sensors
+
+The robot has the following sensor variables you can read
+
+allCommandsComplete - Set to 1 when the robot has finished a command
+ultrasonicRangeCM - Gives the range in cm seen by the sonar. If the range is greater than or equal to 400cm no obstacle is seen
+artifactID - If an artifact is seen with the detectArtifact command this sensor variable is set to the ID of the artifact. A number from 1 to 9. If no artifact is seen then artifactId will read -1.
+artifactBearingDegrees - If an artifact is seen then this sensor reading will give the angle to the artifact in degrees
+
+Hints
+======
+
+* It may be quicker to drive between the obstacles, but you're more likely to crash
+* Turning and movement on the real robot will not be as accurate as in the simulator

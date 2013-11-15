@@ -13,6 +13,19 @@ import math
 import scratch_background
 
 #---------------------------------------------------------------------------------------------------
+class Obstacle:
+    
+    WIDTH_CM = 31.0
+    HEIGHT_CM = 23.0
+    
+    #-----------------------------------------------------------------------------------------------
+    def __init__( self, posX, posY, headingDegrees ):
+    
+        self.posX = posX
+        self.posY = posY
+        self.headingDegrees = headingDegrees
+
+#---------------------------------------------------------------------------------------------------
 class RobotSimulator( scratch_background.ScratchBase ):
     
     MIN_TIME_BETWEEN_SIM_STEPS = 0.05
@@ -21,6 +34,14 @@ class RobotSimulator( scratch_background.ScratchBase ):
     MOVE_SPEED_PER_SECOND = 20.0        # In cm per second
     TURN_SPEED_PER_SECOND = 90.0/4.0    # In degrees per second
     
+    OBSTACLES = [
+        Obstacle( 0, -50, 90 ),
+        Obstacle( Obstacle.WIDTH_CM/2.0 + Obstacle.HEIGHT_CM/2.0, -50.0 + Obstacle.WIDTH_CM/2.0 + Obstacle.HEIGHT_CM/2.0, 0 ),
+        Obstacle( Obstacle.WIDTH_CM/2.0 + Obstacle.HEIGHT_CM/2.0, -50.0 + 3.0*Obstacle.WIDTH_CM/2.0 + Obstacle.HEIGHT_CM/2.0, 0 ),
+        Obstacle( -100.0, -50.0 + Obstacle.WIDTH_CM/4.0, 0 ),
+        Obstacle( -100.0 + Obstacle.HEIGHT_CM/2.0, -50.0 + 3.0*Obstacle.WIDTH_CM/4.0 + Obstacle.HEIGHT_CM/2.0, 90 )
+    ]
+    
     #-----------------------------------------------------------------------------------------------
     def __init__( self, socket, commandQueue ):
         scratch_background.ScratchBase.__init__( self, socket )
@@ -28,6 +49,13 @@ class RobotSimulator( scratch_background.ScratchBase ):
         self.commandQueue = commandQueue
         self.timeOfLastSimulatorStep = time.time()
         self.timeOfLastSensorUpdate = time.time()
+        
+        for i, obstacle in enumerate( self.OBSTACLES ):
+                    
+            print "Obstacle_{0}_X".format( i + 1 ), obstacle.posX
+            print "Obstacle_{0}_Y".format( i + 1 ), obstacle.posY
+            print "Obstacle_{0}_HeadingDegrees".format( i + 1 ), obstacle.headingDegrees
+        
         
         self.reset()
     
@@ -48,9 +76,9 @@ class RobotSimulator( scratch_background.ScratchBase ):
     #-----------------------------------------------------------------------------------------------
     def reset( self ):
         
-        self.roverX = 0
-        self.roverY = 0
-        self.headingDegrees = 90
+        self.roverX = scratch_background.ROVER_START_X
+        self.roverY = scratch_background.ROVER_START_Y
+        self.headingDegrees = scratch_background.ROVER_START_HEADING_DEGREES
         self.curCommand = None
         self.allCommandsComplete = False
         
@@ -164,6 +192,11 @@ class RobotSimulator( scratch_background.ScratchBase ):
                 else:
                     self.sendSensorUpdate( "allCommandsComplete", 0 )
                 
+                #for i, obstacle in enumerate( self.OBSTACLES ):
+                    
+                    #self.sendSensorUpdate( "Obstacle_{0}_X".format( i + 1 ), obstacle.posX )
+                    #self.sendSensorUpdate( "Obstacle_{0}_Y".format( i + 1 ), obstacle.posY )
+                    #self.sendSensorUpdate( "Obstacle_{0}_HeadingDegrees".format( i + 1 ), obstacle.headingDegrees )
                 
                 self.timeOfLastSensorUpdate = curTime
     

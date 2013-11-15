@@ -14,8 +14,10 @@ const int RIGHT_PWM_PIN = 10;
 const int RIGHT_ENCODER_FIRST_PIN = 2;
 const int RIGHT_ENCODER_SECOND_PIN = 4;
 
+//const int ULTRASONIC_PIN = 12;
+
 const float ABS_MOVE_RPM = 40.0f;
-const float ABS_TURN_RPM = 30.0f;
+const float ABS_TURN_RPM = 40.0f;
 
 RoverMotor gLeftMotor( LEFT_DIR_PIN, LEFT_PWM_PIN,
     LEFT_ENCODER_FIRST_PIN, LEFT_ENCODER_SECOND_PIN );
@@ -63,6 +65,11 @@ void loop()
                 gRightMotor.setTargetRPM( -ABS_TURN_RPM );
                 break;
             }
+        case '\n':
+            {
+                // Ignore
+                break;
+            }
         case 's':
         default:
             {
@@ -73,10 +80,23 @@ void loop()
         }
     }
     
-    // Output debug info here
+    // Use the ultrasonic sensor to look for obstacles
+    /*pinMode( ULTRASONIC_PIN, OUTPUT );
+    digitalWrite( ULTRASONIC_PIN, LOW );
+    delayMicroseconds( 2 );
+    digitalWrite( ULTRASONIC_PIN, HIGH );
+    delayMicroseconds( 5 );
+    digitalWrite( ULTRASONIC_PIN, LOW );
+    pinMode( ULTRASONIC_PIN, INPUT );
+    long duration = pulseIn( ULTRASONIC_PIN, HIGH );
+    long distanceCM = duration/29/2;*/	
+    
+    // Output robot status here
     Serial.print( gLeftMotor.getLastMeasuredEncoderTicks() );
     Serial.print( " " );
     Serial.println( gRightMotor.getLastMeasuredEncoderTicks() );
+    //Serial.print( " " );
+    //Serial.println( distanceCM );
 }
 
 
