@@ -11,6 +11,39 @@ import errno
 import multiprocessing
 import math
 import scratch_background
+import random
+
+#---------------------------------------------------------------------------------------------------
+def intersectLineSegments( o1, p1, o2, p2 ):
+    
+    intersectionPos = None
+    distanceToIntersection = None
+    
+    oVec = ( o2[ 0 ] - o1[ 0 ], o2[ 1 ] - o1[ 1 ] )
+    dir1 = ( p1[ 0 ] - o1[ 0 ], p1[ 1 ] - o1[ 1 ] )
+    dir2 = ( p2[ 0 ] - o2[ 0 ], p2[ 1 ] - o2[ 1 ] )
+    
+    cross = dir1[ 0 ]*dir2[ 1 ] - dir1[ 1 ]*dir2[ 0 ];
+    if abs(cross) < 1e-8:
+        return intersectionPos, distanceToIntersection  # Parallel lines
+    
+    t = (oVec[ 0 ]*dir2[ 1 ] - oVec[ 1 ]*dir2[ 0 ])/cross
+    
+    intersectionPos = ( o1[ 0 ] + t*dir1[ 0 ], o1[ 1 ] + t*dir1[ 1 ] )
+    dirLength1 = math.sqrt( dir1[ 0 ]**2 + dir1[ 1 ]**2 )
+    distanceToIntersection = t*dirLength1
+    
+    if dir2[ 0 ] != 0:
+    
+        otherT = (intersectionPos[ 0 ] - o2[ 0 ])/dir2[ 0 ]
+        if otherT < 0.0 or otherT > 1.0:
+            
+            intersectionPos = None
+            distanceToIntersection = None
+
+    return intersectionPos, distanceToIntersection
+        
+        
 
 #---------------------------------------------------------------------------------------------------
 class Obstacle:
@@ -24,6 +57,56 @@ class Obstacle:
         self.posX = posX
         self.posY = posY
         self.headingDegrees = headingDegrees
+        
+    #-----------------------------------------------------------------------------------------------
+    def intersectUltrasonicRay( self, rayStartPos, rayEndPos ):
+        
+        oX = ( (self.WIDTH_CM/2.0)*math.sin( math.radians( self.headingDegrees ) ),
+            (self.WIDTH_CM/2.0)*math.cos( math.radians( self.headingDegrees ) ) )
+        oY = ( (self.HEIGHT_CM/2.0)*math.cos( math.radians( self.headingDegrees) ),
+            (self.HEIGHT_CM/2.0)*math.sin( math.radians( self.headingDegrees ) ) )
+        
+        corners = [ 
+            ( self.posX - oX[ 0 ] - oY[ 0 ], self.posY - oX[ 1 ] - oY[ 1 ] ),
+            ( self.posX + oX[ 0 ] - oY[ 0 ], self.posY + oX[ 1 ] - oY[ 1 ] ),
+            ( self.posX + oX[ 0 ] + oY[ 0 ], self.posY + oX[ 1 ] + oY[ 1 ] ),
+            ( self.posX - oX[ 0 ] + oY[ 0 ], self.posY - oX[ 1 ] + oY[ 1 ] ) ]
+        
+        #for corner in corners:
+         #   print "     ", corner
+        
+        sides = [
+            ( corners[ 0 ], corners[ 1 ] ),
+            ( corners[ 1 ], corners[ 2 ] ),
+            ( corners[ 2 ], corners[ 3 ] ),
+            ( corners[ 3 ], corners[ 0 ] ) ]
+            
+        minDistanceToIntersection = None
+        for side in sides:
+            
+            intersectionPos, distanceToIntersection = intersectLineSegments(
+                rayStartPos, rayEndPos, side[ 0 ], side[ 1 ] )
+                
+            if intersectionPos != None and distanceToIntersection > 0.0:
+                
+                #print intersectionPos, distanceToIntersection
+
+                if minDistanceToIntersection == None \
+                    or distanceToIntersection < minDistanceToIntersection:
+                        
+                    minDistanceToIntersection = distanceToIntersection
+                    
+        return minDistanceToIntersection
+
+#---------------------------------------------------------------------------------------------------
+class Artifact:
+    
+    #-----------------------------------------------------------------------------------------------
+    def __init__( self, artifactID, posX, posY ):
+        
+        self.artifactID = artifactID
+        self.posX = posX
+        self.posY = posY
 
 #---------------------------------------------------------------------------------------------------
 class RobotSimulator( scratch_background.ScratchBase ):
@@ -33,13 +116,22 @@ class RobotSimulator( scratch_background.ScratchBase ):
     
     MOVE_SPEED_PER_SECOND = 20.0        # In cm per second
     TURN_SPEED_PER_SECOND = 90.0/4.0    # In degrees per second
+    MAX_ULTRASONIC_RANGE_CM = 400
+    MAX_NUM_BEEPS = 9
+    TIME_FOR_BEEP = 0.4
+    BEEP_ON_TIME = 0.3
+    SIMULATED_SCAN_TIME = 5.0
+    MAX_ARTIFACT_DISTANCE = 50.0
+    
+    ROVER_LENGTH = 25.0
     
     OBSTACLES = [
-        Obstacle( 0, -50, 90 ),
-        Obstacle( Obstacle.WIDTH_CM/2.0 + Obstacle.HEIGHT_CM/2.0, -50.0 + Obstacle.WIDTH_CM/2.0 + Obstacle.HEIGHT_CM/2.0, 0 ),
-        Obstacle( Obstacle.WIDTH_CM/2.0 + Obstacle.HEIGHT_CM/2.0, -50.0 + 3.0*Obstacle.WIDTH_CM/2.0 + Obstacle.HEIGHT_CM/2.0, 0 ),
-        Obstacle( -100.0, -50.0 + Obstacle.WIDTH_CM/4.0, 0 ),
-        Obstacle( -100.0 + Obstacle.HEIGHT_CM/2.0, -50.0 + 3.0*Obstacle.WIDTH_CM/4.0 + Obstacle.HEIGHT_CM/2.0, 90 )
+        Obstacle( 0, -50.0, 90.0 ),
+        Obstacle( Obstacle.WIDTH_CM/2.0 + Obstacle.HEIGHT_CM/2.0, -50.0 + Obstacle.WIDTH_CM/2.0 + Obstacle.HEIGHT_CM/2.0, 0.0 ),
+        Obstacle( Obstacle.WIDTH_CM/2.0 + Obstacle.HEIGHT_CM/2.0, -50.0 + 3.0*Obstacle.WIDTH_CM/2.0 + Obstacle.HEIGHT_CM/2.0, 0.0 ),
+        Obstacle( -100.0, -50.0 + Obstacle.WIDTH_CM/4.0, 0.0 ),
+        Obstacle( -74.0, -16.0, 90.0 ),
+        Obstacle( -70.0, 10.0, 90.0 )
     ]
     
     #-----------------------------------------------------------------------------------------------
@@ -49,6 +141,9 @@ class RobotSimulator( scratch_background.ScratchBase ):
         self.commandQueue = commandQueue
         self.timeOfLastSimulatorStep = time.time()
         self.timeOfLastSensorUpdate = time.time()
+        self.ultrasonicRangeCM = self.MAX_ULTRASONIC_RANGE_CM
+        self.artifactID = -1
+        self.artifactBearingDegrees = 0.0
         
         for i, obstacle in enumerate( self.OBSTACLES ):
                     
@@ -79,18 +174,67 @@ class RobotSimulator( scratch_background.ScratchBase ):
         self.roverX = scratch_background.ROVER_START_X
         self.roverY = scratch_background.ROVER_START_Y
         self.headingDegrees = scratch_background.ROVER_START_HEADING_DEGREES
+        self.buzzerOn = False
         self.curCommand = None
         self.allCommandsComplete = False
+        
+        self.lastRoverXSent = -10000
+        self.lastRoverYSent = -10000
+        self.lastRoverHeadingDegreesSent = -10000
+        self.lastBuzzerOnSent = -10000
+        self.lastUltrasonicRangeCMSent = -10000
+        self.lastArtifactIDSent = -10000
+        self.lastArtifactBearingDegreesSent = -10000
+        self.lastAllCommandsCompleteSent = -10000
+        self.lastArtifactSent = None
         
         self.distanceMoved = 0
         self.distanceToMove = 0
         self.degreesToTurn = 0
         self.degreesTurned = 0
+        
+        if random.random() < 0.5:
+            
+            self.artifact = Artifact( 3, 27, 28 )
+            
+        else:
+            
+            self.artifact = Artifact( 5, -70, 29 )
+    
+    #---------------------------------------------------------------------------------------------------
+    def readDistanceFromSonarCM( self ):
+        
+        distanceCM = self.MAX_ULTRASONIC_RANGE_CM
+        
+        headingX = math.sin( math.radians( self.headingDegrees ) )
+        headingY = math.cos( math.radians( self.headingDegrees ) )
+        
+        halfRoverLength = self.ROVER_LENGTH/2.0
+        rayStartX = self.roverX + halfRoverLength*headingX
+        rayStartY = self.roverY + halfRoverLength*headingY
+        rayEndX = rayStartX + self.MAX_ULTRASONIC_RANGE_CM*headingX
+        rayEndY = rayStartY + self.MAX_ULTRASONIC_RANGE_CM*headingY
+        
+        # Test against each obstacle in turn
+        for i, obstacle in enumerate( self.OBSTACLES ):
+            
+            #print "obstacle", i
+            
+            distanceToIntersectionCM = obstacle.intersectUltrasonicRay( ( rayStartX, rayStartY ), ( rayEndX, rayEndY ) )
+            
+            if distanceToIntersectionCM != None:
+                if distanceToIntersectionCM < distanceCM:
+                    
+                    distanceCM = distanceToIntersectionCM
+        
+        return distanceCM
     
     #-----------------------------------------------------------------------------------------------
     def run( self ):
         
         while not self.stopped():
+
+            loopStartTime = time.time()
 
             # Get the next command off the top of the queue if there is one
             if not self.commandQueue.empty():
@@ -131,6 +275,20 @@ class RobotSimulator( scratch_background.ScratchBase ):
                             self.curCommand = "turn"
                             self.degreesToTurn = self.parseNumber( newCommand[ len( "turn" ): ] )
                             self.degreesTurned = 0
+                            
+                        elif newCommand.startswith( "beep" ):
+                        
+                            self.curCommand = "beep"
+                            self.numBeepsToMake = self.parseNumber( newCommand[ len( "beep" ): ] )
+                            if self.numBeepsToMake > self.MAX_NUM_BEEPS:
+                                self.numBeepsToMake = self.MAX_NUM_BEEPS
+                            self.numBeepsMade = 0
+                            self.waitingForBeepToComplete = False
+                            
+                        elif newCommand == "detectartifact":
+                            
+                            self.curCommand = "detectartifact"
+                            self.scanStartTime = time.time()
 
             # Update the robot simulation
             curTime = time.time()
@@ -177,20 +335,123 @@ class RobotSimulator( scratch_background.ScratchBase ):
                         self.curCommand = None
                         self.allCommandsComplete = True
                 
+                elif self.curCommand == "beep":
+                
+                    self.buzzerOn = False
+                
+                    if self.waitingForBeepToComplete \
+                        and curTime - self.timeBeepStarted >= self.TIME_FOR_BEEP:
+                        
+                        self.numBeepsMade += 1
+                        self.waitingForBeepToComplete = False
+                        
+                    if self.numBeepsMade >= self.numBeepsToMake:
+                        
+                        self.curCommand = None
+                        self.allCommandsComplete = True
+                        
+                    else:
+                        
+                        if not self.waitingForBeepToComplete:
+                            # Start beep
+                            self.buzzerOn = True
+                            self.waitingForBeepToComplete = True
+                            self.timeBeepStarted = time.time()
+                            
+                        elif curTime - self.timeBeepStarted <= self.BEEP_ON_TIME:
+                            
+                            self.buzzerOn = True
+                
+                elif self.curCommand == "detectartifact":
+                    
+                    if curTime - self.scanStartTime >= self.SIMULATED_SCAN_TIME:
+                        
+                        # Look to see if the artifact is in view
+                        artifactVecX = self.artifact.posX - self.roverX
+                        artifactVecY = self.artifact.posY - self.roverY
+                        
+                        headingX = math.sin( math.radians( self.headingDegrees ) )
+                        headingY = math.cos( math.radians( self.headingDegrees ) )
+                        
+                        distanceToArtifact = math.sqrt( artifactVecX**2 + artifactVecY**2 )
+                        if distanceToArtifact <= self.MAX_ARTIFACT_DISTANCE:
+                            
+                            print "Artifact close"
+                            
+                            self.artifactID = self.artifact.artifactID
+                            self.artifactBearingDegrees = 0.0
+                            
+                            if distanceToArtifact > 0.0:
+                                artifactDirX = artifactVecX/distanceToArtifact
+                                artifactDirY = artifactVecY/distanceToArtifact
+                                
+                                cosOfAngle = artifactDirX*headingX + artifactDirY*headingY
+                                self.artifactBearingDegrees = math.degrees( math.acos( cosOfAngle ) )
+                                
+                                cosOfSideAngle = artifactDirX*-headingY + artifactDirY*headingX
+                                if cosOfSideAngle >= 0.0:
+                                    self.artifactBearingDegrees = -self.artifactBearingDegrees
+                            
+                        else:
+                            
+                            self.artifactID = -1
+                            self.artifactBearingDegrees = 0.0
+                            
+                        # Finished detection
+                        self.curCommand = None
+                        self.allCommandsComplete = True
+                
                 self.timeOfLastSimulatorStep = curTime
+            
+            # Simulate the ultrasonic sensor
+            self.ultrasonicRangeCM = self.readDistanceFromSonarCM()
             
             # Send current state back to scratch
             curTime = time.time()
             if curTime - self.timeOfLastSensorUpdate >= self.MIN_TIME_BETWEEN_SENSOR_UPDATES:
                 
-                self.sendSensorUpdate( "roverX", self.roverX )
-                self.sendSensorUpdate( "roverY", self.roverY )
-                self.sendSensorUpdate( "roverHeadingDegrees", self.headingDegrees )
+                if self.roverX != self.lastRoverXSent:
+                    self.sendSensorUpdate( "roverX", self.roverX )
+                    self.lastRoverXSent = self.roverX
                 
-                if self.allCommandsComplete:
-                    self.sendSensorUpdate( "allCommandsComplete", 1 )
-                else:
-                    self.sendSensorUpdate( "allCommandsComplete", 0 )
+                if self.roverY != self.lastRoverYSent:
+                    self.sendSensorUpdate( "roverY", self.roverY )
+                    self.lastRoverYSent = self.roverY
+                
+                if self.headingDegrees != self.lastRoverHeadingDegreesSent:
+                    self.sendSensorUpdate( "roverHeadingDegrees", self.headingDegrees )
+                    self.lastRoverHeadingDegreesSent = self.headingDegrees
+                
+                if self.buzzerOn != self.lastBuzzerOnSent:
+                    self.sendSensorUpdate( "buzzerOn", self.buzzerOn )
+                    self.lastBuzzerOnSent = self.buzzerOn
+                
+                if self.ultrasonicRangeCM != self.lastUltrasonicRangeCMSent:
+                    self.sendSensorUpdate( "ultrasonicRangeCM", self.ultrasonicRangeCM )
+                    self.lastUltrasonicRangeCMSent = self.ultrasonicRangeCM
+                    
+                if self.artifactID != self.lastArtifactIDSent:
+                    self.sendSensorUpdate( "artifactID", self.artifactID )
+                    self.lastArtifactIDSent = self.artifactID
+                    
+                if self.artifactBearingDegrees != self.lastArtifactBearingDegreesSent:
+                    self.sendSensorUpdate( "artifactBearingDegrees", self.artifactBearingDegrees )
+                    self.lastArtifactBearingDegreesSent = self.artifactBearingDegrees
+
+                if self.artifact != self.lastArtifactSent:
+                    
+                    self.sendSensorUpdate( "artifactX", self.artifact.posX )
+                    self.sendSensorUpdate( "artifactY", self.artifact.posY )
+                    self.lastArtifactSent = self.artifact
+                
+                if self.allCommandsComplete != self.lastAllCommandsCompleteSent:
+                    
+                    if self.allCommandsComplete:
+                        self.sendSensorUpdate( "allCommandsComplete", 1 )
+                    else:
+                        self.sendSensorUpdate( "allCommandsComplete", 0 )
+                        
+                    self.lastAllCommandsCompleteSent = self.allCommandsComplete
                 
                 #for i, obstacle in enumerate( self.OBSTACLES ):
                     
@@ -199,6 +460,15 @@ class RobotSimulator( scratch_background.ScratchBase ):
                     #self.sendSensorUpdate( "Obstacle_{0}_HeadingDegrees".format( i + 1 ), obstacle.headingDegrees )
                 
                 self.timeOfLastSensorUpdate = curTime
+                
+            loopEndTime = time.time()
+            minIdealLoopTime = min( self.MIN_TIME_BETWEEN_SIM_STEPS, self.MIN_TIME_BETWEEN_SENSOR_UPDATES )
+            elapsedTime = loopEndTime - loopStartTime
+            remainingTime = minIdealLoopTime - elapsedTime
+            
+            if remainingTime > 0.0:
+                #print remainingTime, "remaining"
+                time.sleep( remainingTime )
     
     #-----------------------------------------------------------------------------------------------
     def sendSensorUpdate(self, sensorName, value ):

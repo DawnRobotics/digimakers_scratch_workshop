@@ -372,6 +372,7 @@ class CommandHandler( ProcessBase ):
     }
     
     BUZZER_PIN = 8
+    BUZZER_LED_PIN = 4
     BUZZER_TIME = 0.25
     
     #-----------------------------------------------------------------------------------------------
@@ -386,6 +387,7 @@ class CommandHandler( ProcessBase ):
         self.buzzerActive = False
         self.buzzerStartTime = 0
         RPIO.setup( self.BUZZER_PIN, RPIO.OUT )
+        RPIO.setup( self.BUZZER_LED_PIN, RPIO.OUT )
         
         self.roverState = "Stopped"
         
@@ -447,11 +449,13 @@ class CommandHandler( ProcessBase ):
                 
                 # Buzzer on
                 RPIO.output( self.BUZZER_PIN, RPIO.HIGH )
+                RPIO.output( self.BUZZER_LED_PIN, RPIO.HIGH )
                 
             else:
                 
                 # Buzzer off
                 RPIO.output( self.BUZZER_PIN, RPIO.LOW )
+                RPIO.output( self.BUZZER_LED_PIN, RPIO.LOW )
             
             # Sleep if needed
             elapsedTime = time.time() - loopStartTime
