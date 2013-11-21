@@ -2,6 +2,8 @@ This is code and documentation for a workshop that we ran teaching beginners how
 
 A series of blog posts describing the hardware and software that we used for the robot can be found at http://blog.dawnrobotics.co.uk/2013/11/building-a-raspberry-pi-robot-and-controlling-it-with-scratch-part-1.
 
+To get an understanding of what the workshop is about, read the worksheet in the docs folder.
+
 People are welcome to use and modify the vast majority of this stuff however they want to (some individual files may be covered by the GPL or other open source licenses as they were taken from elsewhere).
 
 The Encoder library used in the mini driver sketch comes from http://www.pjrc.com/teensy/td_libs_Encoder.html and is Copyright (c) 2011,2013 PJRC.COM, LLC - Paul Stoffregen <paul@pjrc.com>
